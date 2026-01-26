@@ -1,0 +1,30 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set ip "192.168.1.1"
+set user "root"
+set password "PASSWORD_PLACEHOLDER"
+set command "cat /var/log/messages | grep -E 'oom-killer|suricata|kernel|UBIC' | tail -n 20"
+
+# -T disables pseudo-tty allocation (avoids shell hang if PTYs are exhausted)
+spawn ssh -o StrictHostKeyChecking=no -T $user@$ip $command
+
+expect {
+  "password:" {
+    send "$password\r"
+    exp_continue
+  }
+  "Permission denied" {
+    puts "Authentication failed"
+    exit 1
+  }
+  eof {
+    puts "Command finished"
+    exit 0
+  }
+  timeout {
+    puts "Connection timed out"
+    exit 1
+  }
+}
+expect eof
