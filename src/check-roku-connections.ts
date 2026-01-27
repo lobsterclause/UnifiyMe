@@ -12,28 +12,32 @@ const config = {
     kex: ['diffie-hellman-group1-sha1', 'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521', 'diffie-hellman-group-exchange-sha256', 'diffie-hellman-group14-sha1'],
     cipher: ['aes128-ctr', 'aes192-ctr', 'aes256-ctr', 'aes128-cbc', '3des-cbc'],
     serverHostKey: ['ssh-rsa', 'ssh-dss']
-  } as any // Bypass strict algorithm typing issues
+  } as any
 };
 
-console.log('Connecting via ssh2...');
+const ROKU_IP = '192.168.1.x';
+
+console.log(`Connecting to ${config.host} via SSH to investigate Roku (${ROKU_IP})...`);
 
 conn.on('ready', () => {
-  console.log('Client :: ready');
+  console.log('SSH Ready.');
   
-  // Use exec instead of shell to avoid PTY allocation if possible
-  conn.exec('cat /var/log/messages | grep -E "oom-killer|suricata|kernel|UBIC"', (err, stream) => {
+  // Check active connections for the Roku IP
+  const command = `cat /proc/net/nf_conntrack | grep ${ROKU_IP} | awk '{print $1,$4,$5,$6,$7,$8,$9,$10,$11}'`;
+  
+  conn.exec(command, (err, stream) => {
     if (err) {
         console.error('Exec error:', err);
         return conn.end();
     }
     
+    console.log('--- Active Connections for Roku ---');
     stream.on('close', (code: any, signal: any) => {
-      console.log('Stream :: close :: code: ' + code + ', signal: ' + signal);
       conn.end();
     }).on('data', (data: any) => {
-      console.log('STDOUT: ' + data);
+      process.stdout.write(data);
     }).stderr.on('data', (data: any) => {
-      console.log('STDERR: ' + data);
+      process.stderr.write(data);
     });
   });
   

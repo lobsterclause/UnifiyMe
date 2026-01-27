@@ -1,16 +1,16 @@
 #!/usr/bin/expect -f
 
-set timeout 60
+set timeout 120
 set ip "192.168.1.1"
 set user "root"
-set password "PASSWORD_PLACEHOLDER"
-set command "cat /var/log/messages | grep -E 'oom-killer|suricata|kernel|UBIC' | tail -n 20"
+set password "9AMercKLfmd\$7Hhk"
+set command "top -b -n 1 -o %MEM | head -n 20"
 
 # -T disables pseudo-tty allocation (avoids shell hang if PTYs are exhausted)
 spawn ssh -o StrictHostKeyChecking=no -T $user@$ip $command
 
 expect {
-  "password:" {
+  -nocase "password:" {
     send "$password\r"
     exp_continue
   }

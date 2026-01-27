@@ -8,21 +8,27 @@ dotenv.config();
 const POLL_INTERVAL_MS = 60_000;
 const CRITICAL_LOAD_THRESHOLD = 4.0;
 const CRITICAL_MEM_THRESHOLD_MB = 1800; // ~90% of 2GB
-const PENALTY_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const PENALTY_DURATION_MS = 10 * 60 * 1000; // 10 minutes for throttle
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+const BW_THRESHOLD_MBPS = 15; // 15 Mbps spike threshold
+const THROTTLE_RATE_KBPS = 2000; // 2 Mbps limit
 
 interface PenaltyRecord {
     mac: string;
     hostname: string;
     unblockTime: number;
+    originalGroupId?: string;
+    clientId: string;
 }
 
-class UnifiMonitor {
+export class UnifiMonitor {
     private client: UnifiClient;
     private penaltyBox: Map<string, PenaltyRecord> = new Map();
+    private throttledGroupId: string | null = null;
+    private defaultGroupId: string | null = null;
 
-    constructor() {
-        this.client = new UnifiClient(
+    constructor(client?: UnifiClient) {
+        this.client = client || new UnifiClient(
             process.env.UNIFI_HOST!,
             process.env.UNIFI_USERNAME!,
             process.env.UNIFI_PASSWORD!,
@@ -32,58 +38,84 @@ class UnifiMonitor {
 
     async start() {
         console.log('Starting UniFi Active Mitigation Monitor...');
-        console.log(`Config: Load > ${CRITICAL_LOAD_THRESHOLD}, Mem > ${CRITICAL_MEM_THRESHOLD_MB}MB => Penalty Box (${PENALTY_DURATION_MS / 60000} mins)`);
         
         try {
             await this.client.connect();
         } catch (err) {
-            console.error('Failed to connect:', err);
-            return;
+            console.error('Initial connection failed (will retry):', err);
         }
 
+        console.log(`Config: Load > ${CRITICAL_LOAD_THRESHOLD}, Mem > ${CRITICAL_MEM_THRESHOLD_MB}MB => Throttle (${PENALTY_DURATION_MS / 60000} mins)`);
+
         while (true) {
+            // Ensure groups are setup if they weren't initially
+            if (!this.throttledGroupId) {
+                try {
+                    await this.setupGroups();
+                } catch (err: any) {
+                    console.warn('Waiting for Gateway to establish UniFi connection for group setup...');
+                }
+            }
+
+            let currentInterval = POLL_INTERVAL_MS;
             try {
-                await this.cycle();
+                const stats = await this.cycle();
+                // If load is critical, back off polling to 2 minutes to reduce router stress
+                if (stats && (stats.load > CRITICAL_LOAD_THRESHOLD || stats.memUsed > CRITICAL_MEM_THRESHOLD_MB)) {
+                    currentInterval = POLL_INTERVAL_MS * 2;
+                }
             } catch (err) {
                 console.error('Cycle error:', err);
             }
-            await setTimeout(POLL_INTERVAL_MS);
+            await setTimeout(currentInterval);
         }
     }
 
-    private async cycle() {
-        // 1. Manage Penalty Box (Release prisoners)
-        const now = Date.now();
-        for (const [mac, record] of this.penaltyBox.entries()) {
-            if (now >= record.unblockTime) {
-                console.log(`Releasing ${record.hostname} (${mac}) from penalty box...`);
-                await this.client.unblockClient(mac);
-                this.penaltyBox.delete(mac);
-                await this.notifyDiscord(`✅ **RELEASED** Client **${record.hostname}** (${mac}) from penalty box.`);
+    private async setupGroups() {
+        const groups = await this.client.getUserGroups();
+        const throttled = groups.find(g => g.name === 'Throttled');
+        const defaultGroup = groups.find(g => g.name === 'Default');
+        
+        if (throttled) {
+            this.throttledGroupId = throttled._id;
+        } else {
+            console.log('Creating "Throttled" user group (2Mbps)...');
+            const newGroup = await this.client.createUserGroup('Throttled', THROTTLE_RATE_KBPS, THROTTLE_RATE_KBPS);
+            if (newGroup && newGroup[0]) {
+                this.throttledGroupId = newGroup[0]._id;
+            } else {
+                throw new Error('Failed to create or find Throttled group');
             }
         }
 
-        // 2. Add Caching context for this cycle
-        const sysInfo = await this.client.getSiteSysinfo();
-        const subsystem = sysInfo[0]?.subsystem;
-        
-        // Extract Metrics
-        // Note: 'loadavg' is usually [1m, 5m, 15m], typically scaled by 100 or as float depending on version
-        // But for UDM-Base via node-unifi 'sys_stats' might be better. 
-        // Let's rely on what we saw in get-status: "Load: 1.45"
-        
-        // Fetch devices to get accurate load
+        if (defaultGroup) {
+            this.defaultGroupId = defaultGroup._id;
+        }
+    }
+
+    private async cycle(): Promise<{ load: number, memUsed: number } | void> {
+        // 1. Manage Penalty Box (Restore original groups)
+        const now = Date.now();
+        for (const [mac, record] of this.penaltyBox.entries()) {
+            if (now >= record.unblockTime) {
+                console.log(`Restoring ${record.hostname} (${mac}) to original group...`);
+                await this.client.setUserGroup(record.clientId, record.originalGroupId || this.defaultGroupId || '');
+                this.penaltyBox.delete(mac);
+                await this.notifyDiscord(`✅ **RESTORED** Client **${record.hostname}** (${mac}) speed limits removed.`);
+            }
+        }
+
+        // 2. Fetch Metrics
         const devices = await this.client.getDevices();
-        const udm = devices.find((d: any) => d.model === 'UDM'); // Assuming UDM-Base
+        const udm = devices.find((d: any) => d.model === 'UDM');
         
         let load = 0;
         let memUsed = 0;
         
         if (udm && udm.sys_stats) {
             load = parseFloat(udm.sys_stats.loadavg_1 || '0');
-            memUsed = parseInt(udm.sys_stats.mem_used || '0', 10) / 1024 / 1024; // Bytes to MB
-        } else if (udm) {
-            console.log('DEBUG UDM object:', JSON.stringify(udm, null, 2)); // Debug stats path
+            const rawMem = udm.sys_stats.mem_used;
+            memUsed = (typeof rawMem === 'number' ? rawMem : parseInt(rawMem || '0', 10)) / 1024 / 1024;
         }
 
         console.log(`[Heartbeat] Load: ${load.toFixed(2)} | Mem: ${Math.round(memUsed)} MB | Boxed: ${this.penaltyBox.size}`);
@@ -91,99 +123,63 @@ class UnifiMonitor {
         // 3. Evaluate Critical State
         if (load > CRITICAL_LOAD_THRESHOLD || memUsed > CRITICAL_MEM_THRESHOLD_MB) {
             console.warn('⚠️  CRITICAL SYSTEM STATE DETECTED');
-            await this.mitigateThreats(load, memUsed);
+            await this.diagnoseAndMitigate(load, memUsed);
+        }
+
+        return { load, memUsed };
+    }
+
+    private async diagnoseAndMitigate(load: number, memUsed: number) {
+        const clients = await this.client.getClients();
+        
+        // Diagnostic: Log top 5 bandwidth users with context
+        const topClients = [...clients]
+            .sort((a, b) => ((b.rx_rate || 0) + (b.tx_rate || 0)) - ((a.rx_rate || 0) + (a.tx_rate || 0)))
+            .slice(0, 5);
+
+        console.log('Top bandwidth users during spike:');
+        topClients.forEach(c => {
+            const rateMbps = (((c.rx_rate || 0) + (c.tx_rate || 0)) / 1024 / 1024 * 8).toFixed(2);
+            console.log(`- ${c.name || c.hostname || c.mac} (${c.oui || 'Unknown'}): ${rateMbps} Mbps`);
+        });
+
+        // Mitigation: Throttle high bandwidth offenders
+        const offenders = clients.filter(c => {
+            const rateMbps = (((c.rx_rate || 0) + (c.tx_rate || 0)) / 1024 / 1024 * 8);
+            return rateMbps > BW_THRESHOLD_MBPS && !this.penaltyBox.has(c.mac);
+        });
+
+        for (const offender of offenders) {
+            const rateMbps = (((offender.rx_rate || 0) + (offender.tx_rate || 0)) / 1024 / 1024 * 8).toFixed(2);
+            console.log(`Throttling ${offender.name || offender.mac} to 2Mbps due to spike (${rateMbps} Mbps).`);
+            await this.enforceThrottle(offender, `High Bandwidth Spike (${rateMbps} Mbps) during Critical Load`);
         }
     }
 
-    private async mitigateThreats(load: number, memUsed: number) {
-        // Fetch recent alerts (last 24 hours, but we will filter by mostly recent)
-        // Note: node-unifi getAlarms() doesn't strictly filter by time easily in valid params without testing
-        // We'll fetch and filter in memory.
-        const alarms = await this.client.getAlarms({ within: 1 }); // Last 1 hour
-        
-        // Filter for P2P/IPS threats in the last 10 minutes
-        const tenMinsAgo = Date.now() - (10 * 60 * 1000);
-        const threats = alarms.filter((a: any) => {
-            const time = new Date(a.time).getTime();
-            const isRecent = time > tenMinsAgo;
-            const msg = (a.msg || '').toLowerCase();
-            const key = (a.key || '').toLowerCase();
-            const isThreat = key.includes('ips') || msg.includes('p2p') || msg.includes('corporate privacy');
-            return isRecent && isThreat;
-        });
+    private async enforceThrottle(client: any, reason: string) {
+        if (!this.throttledGroupId) return;
 
-        if (threats.length === 0) {
-            console.log('High load detected, but no recent IPS/P2P threats found to mitigate.');
-            return;
-        }
-
-        // Identify Offenders
-        const offenders = new Set<string>(); // MACs
-        threats.forEach((t: any) => {
-            // Some alerts have source_mac or similar fields?
-            // Usually 'mac' field in alarm refers to the AP or device, check specific payload structure
-            // IPS alerts often contain 'src_ip' or 'inner_alert_source_ip'.
-            // We need to map IP to MAC.
-            // For now, let's assume alarm object might have specific client mac if properly associated.
-            // If not, we iterate active clients to match IPs.
-            // This is complex. Let's simplify: 
-            // Most UniFi IPS alarms don't link directly to a client object in the alarm.
-            // But if we saw "From: 192.168.1.x", we can look that up.
-            
-            // Extract IP from message if possible (node-unifi result structure dependent)
-            // Let's assume we can't reliably parse raw text easily without regex.
-            // But we can check known keys.
-        });
-
-        // Simplified Approach: If ANY P2P alert exists, check active clients for HIGH BANDWIDTH + MATCHING TRAFFIC TYPE?
-        // Actually, let's use the 'identify-client' logic.
-        
-        // Since we can't perfectly parse every alert format blindly:
-        // Let's finding the most recent IPS alert, extract IP if possible.
-        // Actually, to be safe and simple:
-        // We will just alert the user via Discord for now if we can't 100% ID the client.
-        // BUT the user asked to "Pause traffic".
-        
-        // Let's try to extract IP from the `msg` field using regex we saw: "From: 1.2.3.4"
-        const recentThreatIPs = new Set<string>();
-        threats.forEach((t: any) => {
-             const match = (t.msg || '').match(/From: (\d+\.\d+\.\d+\.\d+)/);
-             if (match) recentThreatIPs.add(match[1]);
-        });
-
-        if (recentThreatIPs.size > 0) {
-            const clients = await this.client.getClients();
-            
-            for (const ip of recentThreatIPs) {
-                const client = clients.find((c: any) => c.ip === ip);
-                if (client && !this.penaltyBox.has(client.mac)) {
-                     // FOUND OFFENDER
-                     console.log(`Mitigating traffic from ${client.name} (${client.mac}) due to high load + threat.`);
-                     await this.enforcePenalty(client);
-                }
-            }
-        }
-    }
-
-    private async enforcePenalty(client: any) {
         const mac = client.mac;
         const name = client.name || client.hostname || mac;
+        const originalGroupId = client.usergroup_id || this.defaultGroupId;
         
         try {
-            await this.client.blockClient(mac);
+            await this.client.setUserGroup(client._id, this.throttledGroupId);
             
             this.penaltyBox.set(mac, {
                 mac,
                 hostname: name,
+                clientId: client._id,
+                originalGroupId,
                 unblockTime: Date.now() + PENALTY_DURATION_MS
             });
             
-            await this.notifyDiscord(`🛑 **PAUSED** Client **${name}** ` +
-                `(${mac}) for 5 mins.\n` +
-                `Reason: High Router Load + IPS Detected.`);
+            await this.notifyDiscord(`📉 **THROTTLED** Client **${name}** (${mac}) to 2Mbps for 10 mins.\n` +
+                `Context: ${client.oui || 'Unknown'} device.\n` +
+                `Reason: ${reason}`);
                 
         } catch (err) {
-            console.error(`Failed to block ${mac}:`, err);
+            console.error(`Failed to throttle ${mac}:`, err);
         }
     }
 
@@ -205,4 +201,6 @@ class UnifiMonitor {
     }
 }
 
-new UnifiMonitor().start();
+if (import.meta.url.endsWith('src/monitor.ts') || import.meta.url.endsWith('dist/monitor.js')) {
+    new UnifiMonitor().start();
+}
