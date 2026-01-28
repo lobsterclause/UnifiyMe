@@ -15,7 +15,7 @@ const config = {
   } as any
 };
 
-const ROKU_IP = '192.168.1.x';
+const ROKU_IP = process.env.TARGET_ROKU_IP || '192.168.1.x';
 
 console.log(`Connecting to ${config.host} via SSH to investigate Roku (${ROKU_IP})...`);
 
