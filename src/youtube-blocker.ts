@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { UnifiClient } from './unifi/client.js';
-import { RestrictedManager } from './restricted-manager.js';
+import { RestrictedManager } from './youtube-manager.js';
 import { DiscordBot } from './discord-bot.js';
 import { REST, Routes } from 'discord.js';
 

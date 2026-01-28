@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { RestrictedManager } from './restricted-manager.js';
+import { RestrictedManager } from './youtube-manager.js';
 import { UnifiClientDevice } from './unifi/client.js';
 
 describe('RestrictedManager', () => {
   it('should identify devices with "Restricted" in their name', () => {
     const clients = [
-      { mac: '00:11:22:33:44:55', name: 'Restricted-iPad', hostname: 'iPad' },
-      { mac: '66:77:88:99:AA:BB', name: 'iPhone', hostname: 'Restricted-iPhone' },
-      { mac: 'CC:DD:EE:FF:00:11', name: 'MacBook', hostname: 'MacBook-Pro' },
+      { mac: '00:11:22:33:44:55', name: 'Restricted-Device-1', hostname: 'Device-1' },
+      { mac: '66:77:88:99:AA:BB', name: 'Device-2', hostname: 'Restricted-Device-2' },
+      { mac: 'CC:DD:EE:FF:00:11', name: 'Workstation', hostname: 'Workstation-01' },
     ];
     
     const manager = new RestrictedManager();
@@ -20,7 +20,7 @@ describe('RestrictedManager', () => {
 
   it('should be case-insensitive', () => {
     const clients = [
-      { mac: '00:11:22:33:44:55', name: 'restricted-ipad' },
+      { mac: '00:11:22:33:44:55', name: 'restricted-device' },
     ];
     
     const manager = new RestrictedManager();
@@ -59,7 +59,7 @@ describe('RestrictedManager', () => {
       const mockUnifi = {
         getNetworkConf: vi.fn().mockResolvedValue([]),
         getClients: vi.fn().mockResolvedValue([
-          { mac: '00:11:22:33:44:55', name: 'Restricted-iPad' }
+          { mac: '00:11:22:33:44:55', name: 'Restricted-Device-1' }
         ]),
         getTrafficRules: vi.fn().mockResolvedValue([]),
         createTrafficRule: vi.fn().mockResolvedValue({ _id: 'new_rule' }),
@@ -80,7 +80,7 @@ describe('RestrictedManager', () => {
       const mockUnifi = {
         getNetworkConf: vi.fn().mockResolvedValue([]),
         getClients: vi.fn().mockResolvedValue([
-          { mac: '00:11:22:33:44:55', name: 'Restricted-iPad' }
+          { mac: '00:11:22:33:44:55', name: 'Restricted-Device-1' }
         ]),
         getTrafficRules: vi.fn().mockResolvedValue([]),
         createTrafficRule: vi.fn().mockResolvedValue({ _id: 'new_rule' }),
@@ -109,7 +109,7 @@ describe('RestrictedManager', () => {
       const mockUnifi = {
         getNetworkConf: vi.fn().mockResolvedValue([]),
         getClients: vi.fn().mockResolvedValue([
-          { mac: '00:11:22:33:44:55', name: 'Restricted-iPad' }
+          { mac: '00:11:22:33:44:55', name: 'Restricted-Device-1' }
         ]),
         getTrafficRules: vi.fn().mockResolvedValue([
           { _id: 'block_id', description: 'Block YouTube for Restricted (Baseline)', enabled: true },

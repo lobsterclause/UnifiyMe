@@ -14,8 +14,8 @@ RUN npm run build
 # Stage 2: Production
 FROM node:20-alpine
 
-# Install SSH and Expect for router diagnostics
-RUN apk add --no-cache openssh-client expect
+# Install SSH, Expect, and Curl for diagnostics and health checks
+RUN apk add --no-cache openssh-client expect curl
 
 WORKDIR /app
 

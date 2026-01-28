@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits, Interaction, ButtonBuilder, ButtonStyle, ActionRowBuilder, TextChannel } from 'discord.js';
-import { RestrictedManager } from './restricted-manager.js';
+import { RestrictedManager } from './youtube-manager.js';
 import { UnifiClient } from './unifi/client.js';
 
 export class DiscordBot {

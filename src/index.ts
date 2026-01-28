@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
-import { RestrictedManager } from './restricted-manager.js';
+import { RestrictedManager } from './youtube-manager.js';
 import { FirewallManager } from './firewall-manager.js';
 import { IotVlanManager } from './iot-vlan-manager.js';
 import { QoSManager } from './qos-manager.js';

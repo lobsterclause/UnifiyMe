@@ -1,0 +1,23 @@
+{
+    email {$ACME_EMAIL:admin@example.com}
+}
+
+:80 {
+    redir https://{host}{uri}
+}
+
+:443 {
+    tls internal
+
+    handle_path /api/* {
+        reverse_proxy unifi-gateway:3000
+    }
+
+    handle_path /grafana/* {
+        reverse_proxy grafana:3000
+    }
+
+    handle /metrics {
+        reverse_proxy unifi-gateway:3000
+    }
+}

@@ -221,11 +221,11 @@ interface IoTDetectionCriteria {
 
 Based on the deep-dive output:
 
-| Device            | MAC/ID              | Current VLAN | Action                  |
-| ----------------- | ------------------- | ------------ | ----------------------- |
-| 43TCLRokuTV       | Hui Zhou Gaoshengda | Main         | Move to IoT             |
-| 38:b8:00:c8:c0:f9 | Wistron Neweb       | Main         | Move to IoT             |
-| 48:f1:eb:c8:a1:44 | Unknown             | Main         | Investigate, likely IoT |
+| Device            | MAC/ID         | Current VLAN | Action                  |
+| ----------------- | -------------- | ------------ | ----------------------- |
+| Smart-TV-01       | Generic-OUI-01 | Main         | Move to IoT             |
+| IoT-Device-02     | Generic-OUI-02 | Main         | Move to IoT             |
+| Unknown-Device-03 | Unknown        | Main         | Investigate, likely IoT |
 
 ---
 

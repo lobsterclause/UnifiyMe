@@ -3,11 +3,48 @@ import { UnifiClient } from './unifi/client.js';
 import retry from 'async-retry';
 import { Registry, Gauge } from 'prom-client';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
+import { RestrictedManager } from './youtube-manager.js';
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+// Security: Rate Limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' }
+});
+app.use(limiter);
+
+// Security: Basic Auth Middleware
+const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY;
+app.use((req, res, next) => {
+    // Skip auth for metrics (Prometheus usually doesn't send headers easily without extra config)
+    if (req.path === '/metrics') return next();
+    
+    const apiKey = req.headers['x-api-key'];
+    if (!GATEWAY_API_KEY) {
+        console.warn('[Gateway] WARNING: GATEWAY_API_KEY not set. API is UNSECURED.');
+        return next();
+    }
+    
+    if (apiKey !== GATEWAY_API_KEY) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
+    }
+    next();
+});
+
+// Public Health Check (No Auth)
+app.get('/health', (req, res) => {
+    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+const restrictedManager = new RestrictedManager();
 
 const register = new Registry();
 
