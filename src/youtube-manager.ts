@@ -88,4 +88,11 @@ export class RestrictedManager {
     const allowRule = rules.find(r => r.description === this.ALLOW_RULE_DESCRIPTION);
     return !(allowRule && allowRule.enabled);
   }
+
+  /**
+   * Periodically called to ensure the baseline blocking rules exist and are enabled.
+   */
+  async reEnforceBlocking(unifi: UnifiClient): Promise<void> {
+    await this.setupRules(unifi);
+  }
 }

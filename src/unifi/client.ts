@@ -93,7 +93,7 @@ export class UnifiClient {
             if (!res.ok) return [];
             const data = await res.json();
             return data.devices || [];
-        } catch (e) {
+        } catch {
             return [];
         }
     }
@@ -123,7 +123,7 @@ export class UnifiClient {
             if (!res.ok) return [];
             const data = await res.json();
             return data.clients || [];
-        } catch (e) {
+        } catch {
             return [];
         }
     }
@@ -163,7 +163,7 @@ export class UnifiClient {
             if (!res.ok) return [];
             const data = await res.json();
             return data.alarms || [];
-        } catch (e) {
+        } catch {
             return [];
         }
     }
@@ -187,6 +187,28 @@ export class UnifiClient {
         this.controller.blockClient(mac)
             .then(() => resolve())
             .catch((err: any) => reject(err));
+    });
+  }
+
+  async setClientFixedIp(client_id: string, network_id: string, ip?: string): Promise<void> {
+    const payload: any = {
+      use_fixedip: true,
+      network_id: network_id
+    };
+    if (ip) payload.fixed_ip = ip;
+
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/user/${client_id}`, 'PUT', payload)
+        .then(() => resolve())
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async setClientNote(client_id: string, note: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/user/${client_id}`, 'PUT', { note })
+        .then(() => resolve())
+        .catch((err: any) => reject(err));
     });
   }
 
@@ -229,7 +251,7 @@ export class UnifiClient {
             if (!res.ok) return [];
             const data = await res.json();
             return data.groups || [];
-        } catch (e) {
+        } catch {
             return [];
         }
     }

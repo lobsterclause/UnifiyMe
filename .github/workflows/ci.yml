@@ -10,10 +10,6 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    services:
-      # Optional: Add Redis or other test dependencies if needed
-      # For now, we only need Node environment
-
     steps:
       - uses: actions/checkout@v4
 

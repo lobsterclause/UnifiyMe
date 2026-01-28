@@ -1,5 +1,6 @@
 import { UnifiClient } from './unifi/client.js';
 import { QoSManager } from './qos-manager.js';
+import { RestrictedManager } from './youtube-manager.js';
 import dotenv from 'dotenv';
 import { setTimeout } from 'timers/promises';
 
@@ -30,8 +31,9 @@ interface PenaltyRecord {
 
 export class UnifiMonitor {
     private client: UnifiClient;
-    private qosManager: QoSManager | null = null;
     private penaltyBox: Map<string, PenaltyRecord> = new Map();
+    private qosManager: QoSManager | null = null;
+    private restrictedManager: RestrictedManager = new RestrictedManager();
     private throttledGroupId: string | null = null;
     private iotLowGroupId: string | null = null;
     private defaultGroupId: string | null = null;
@@ -167,7 +169,14 @@ export class UnifiMonitor {
             await this.qosManager.enforceIoTLimits(clients, iotThreshold);
         }
 
-        // 4. Evaluate Critical State
+        // 4. Persistence: Re-enforce YouTube blocking policies
+        try {
+            await this.restrictedManager.reEnforceBlocking(this.client);
+        } catch (err: any) {
+            console.error('[Persistence] YouTube re-enforcement failed:', err.message);
+        }
+
+        // 5. Evaluate Critical State
         if (load > CRITICAL_LOAD_THRESHOLD || memUsed > CRITICAL_MEM_THRESHOLD_MB) {
             console.warn('⚠️  CRITICAL SYSTEM STATE DETECTED');
             await this.diagnoseAndMitigate(load, memUsed);

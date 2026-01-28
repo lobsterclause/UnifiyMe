@@ -57,9 +57,16 @@ export class IotVlanManager {
       const msg = `[${dryRun ? 'DRY RUN' : 'ACTION'}] Migrating ${device.hostname || device.mac} to network ${targetNetworkId}`;
       results.push(msg);
       if (!dryRun) {
-        // Implementation for actual migration would go here.
-        // For example, setting fixed IP on the target network:
-        // await this.unifi.setFixedIp(device.mac, targetNetworkId, ...);
+        try {
+          // 1. Assign to target network (and potentially pin IP)
+          await this.unifi.setClientFixedIp(device._id, targetNetworkId);
+          // 2. Tag with migration note
+          await this.unifi.setClientNote(device._id, `Migrated to IoT VLAN on ${new Date().toISOString()}`);
+          // 3. Force reconnect to pick up new DHCP lease on target VLAN
+          await this.unifi.reconnectClient(device.mac);
+        } catch (err: any) {
+          results.push(`[ERROR] Failed to migrate ${device.mac}: ${err.message}`);
+        }
       }
     }
     return results;

@@ -22,6 +22,13 @@ This server includes specialized optimizations for UniFi controllers:
 - **Monkey-patched Session Management**: Reduces redundant heartbeat checks, cutting request overhead by up to 50%.
 - **Intelligent Caching**: 10-second TTL cache for frequent lookups to improve responsiveness and reduce controller load.
 
+## Reliability & Security
+
+- **Persistence Layer**: Automated background monitoring ensures that critical traffic rules (like YouTube blocking) are re-enforced every 60 seconds if they are tampered with.
+- **Health Monitoring**: Integrated `/health` endpoint and Docker health checks ensure maximum uptime and automated container recovery.
+- **API Hardening**: All Gateway actions are strictly validated with MAC address regex and required field checks.
+- **Secure Reverse Proxy**: Pre-configured Caddy integration for automated TLS/HTTPS termination.
+
 ## Setup
 
 1. Clone the repository.

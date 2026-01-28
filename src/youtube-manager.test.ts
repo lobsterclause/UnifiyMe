@@ -128,5 +128,45 @@ describe('RestrictedManager', () => {
         enabled: true
       }));
     });
+
+    it('should disable the Allow rule when blocking', async () => {
+      const mockUnifi = {
+        getNetworkConf: vi.fn().mockResolvedValue([]),
+        getClients: vi.fn().mockResolvedValue([{ mac: '00:11:22:33:44:55', name: 'Restricted' }]),
+        getTrafficRules: vi.fn().mockResolvedValue([
+          { _id: 'block_id', description: 'Block YouTube for Restricted (Baseline)', enabled: true },
+          { _id: 'allow_id', description: 'Allow YouTube for Restricted (Temporary Override)', enabled: true }
+        ]),
+        updateTrafficRule: vi.fn().mockResolvedValue({}),
+        getDPIApps: vi.fn().mockResolvedValue([{ _id: 'yt', name: 'YouTube' }])
+      };
+
+      const manager = new RestrictedManager();
+      await manager.blockYouTube(mockUnifi as any);
+
+      expect(mockUnifi.updateTrafficRule).toHaveBeenCalledWith('allow_id', expect.objectContaining({
+        enabled: false
+      }));
+    });
+
+    it('should correctly report if YouTube is blocked', async () => {
+      const manager = new RestrictedManager();
+      const mockUnifi = {
+        getTrafficRules: vi.fn()
+          .mockResolvedValueOnce([{ description: 'Allow YouTube for Restricted (Temporary Override)', enabled: false }])
+          .mockResolvedValueOnce([{ description: 'Allow YouTube for Restricted (Temporary Override)', enabled: true }])
+      };
+
+      expect(await manager.isYouTubeBlocked(mockUnifi as any)).toBe(true);
+      expect(await manager.isYouTubeBlocked(mockUnifi as any)).toBe(false);
+    });
+
+    it('should re-enforce rules calling setupRules', async () => {
+      const manager = new RestrictedManager();
+      const setupSpy = vi.spyOn(manager, 'setupRules').mockResolvedValue();
+      
+      await manager.reEnforceBlocking({} as any);
+      expect(setupSpy).toHaveBeenCalled();
+    });
   });
 });

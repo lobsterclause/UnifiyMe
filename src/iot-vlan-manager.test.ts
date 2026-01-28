@@ -15,6 +15,9 @@ describe('IotVlanManager', () => {
   beforeEach(() => {
     mockUnifi = {
       getClients: vi.fn(),
+      setClientFixedIp: vi.fn(),
+      setClientNote: vi.fn(),
+      reconnectClient: vi.fn(),
     };
     manager = new IotVlanManager(mockUnifi as any, criteria);
   });
@@ -74,5 +77,37 @@ describe('IotVlanManager', () => {
 
     const detected = await manager.detectIotDevices('iot_vlan_id');
     expect(detected).toHaveLength(0);
+  });
+
+  it('should migration devices with dryRun: true (default)', async () => {
+    const devices = [{ mac: '11:22:33:44:55:66', hostname: 'test-iot' }] as any;
+    const results = await manager.migrateDevices(devices, 'new_network');
+    
+    expect(results[0]).toContain('DRY RUN');
+    expect(results[0]).toContain('test-iot');
+    expect(mockUnifi.setClientFixedIp).not.toHaveBeenCalled();
+  });
+
+  it('should migration devices with dryRun: false', async () => {
+    mockUnifi.setClientFixedIp = vi.fn().mockResolvedValue({});
+    mockUnifi.setClientNote = vi.fn().mockResolvedValue({});
+    mockUnifi.reconnectClient = vi.fn().mockResolvedValue({});
+
+    const devices = [{ _id: 'id1', mac: '11:22:33:44:55:66', hostname: 'test-iot' }] as any;
+    const results = await manager.migrateDevices(devices, 'new_network', false);
+    
+    expect(results[0]).toContain('ACTION');
+    expect(mockUnifi.setClientFixedIp).toHaveBeenCalledWith('id1', 'new_network');
+    expect(mockUnifi.setClientNote).toHaveBeenCalled();
+    expect(mockUnifi.reconnectClient).toHaveBeenCalledWith('11:22:33:44:55:66');
+  });
+
+  it('should handle errors during migration', async () => {
+    mockUnifi.setClientFixedIp = vi.fn().mockRejectedValue(new Error('API Error'));
+
+    const devices = [{ _id: 'id1', mac: '11:22:33:44:55:66' }] as any;
+    const results = await manager.migrateDevices(devices, 'network_fail', false);
+    
+    expect(results).toContain('[ERROR] Failed to migrate 11:22:33:44:55:66: API Error');
   });
 });

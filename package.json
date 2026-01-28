@@ -11,6 +11,9 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts",
     "restricted-yt": "tsx src/restricted-yt-blocker.ts"
   },
   "keywords": [],
@@ -33,6 +36,12 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.10",
     "@types/retry": "^0.12.5",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.39.2",
+    "eslint-plugin-import": "^2.32.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

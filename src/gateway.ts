@@ -228,7 +228,29 @@ app.get('/status', async (req, res) => {
     }
 });
 
-app.post('/action/:type', async (req, res) => {
+const validateAction = (req: any, res: any, next: any) => {
+    const { type } = req.params;
+    const { mac, clientId, groupId, name } = req.body;
+
+    if (type === 'block' || type === 'unblock') {
+        if (!mac || !/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(mac)) {
+            return res.status(400).json({ error: 'Invalid or missing MAC address' });
+        }
+    } else if (type === 'throttle') {
+        if (!clientId || !groupId) {
+            return res.status(400).json({ error: 'Missing clientId or groupId' });
+        }
+    } else if (type === 'createGroup') {
+        if (!name) {
+            return res.status(400).json({ error: 'Missing group name' });
+        }
+    } else {
+        return res.status(400).json({ error: `Unknown action type: ${type}` });
+    }
+    next();
+};
+
+app.post('/action/:type', validateAction, async (req, res) => {
     try {
         await ensureConnected();
         const { type } = req.params;
