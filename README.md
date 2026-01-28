@@ -120,6 +120,8 @@ docker-compose up -d
 - `get_firmware_status`: Check for available firmware updates across all devices.
 - `get_firewall_rules`: Get all configured firewall rules.
 - `get_firewall_groups`: Get all configured firewall groups (IP, Port).
+- `get_deep_dive`: Perform a deep dive into network health, DPI stats, and active client traffic.
+- `get_events`: Get recent network events.
 
 ### Control & Management
 
@@ -129,6 +131,18 @@ docker-compose up -d
 - `block_client` / `unblock_client`: Manage network access for clients.
 - `reconnect_client`: Force a client to reconnect.
 - `create_voucher`: Create guest WiFi vouchers.
+- `set_client_user_group`: Assign a client to a specific user group (for throttling).
+- `create_user_group`: Create a new user group with bandwidth limits.
+
+### Specialized Management
+
+- `block_restricted_youtube` / `unblock_restricted_youtube`: Manage YouTube access for Restricted devices.
+- `get_restricted_youtube_status`: Check current YouTube blocking status for Restricted.
+- `detect_iot_devices`: Identify potential IoT devices not on the IoT VLAN.
+- `migrate_iot_devices`: Propose migration of detected IoT devices to a target network.
+- `enforce_iot_limits`: Throttle high-bandwidth IoT devices.
+- `protect_vips`: Ensure VIP devices are not throttled.
+- `ensure_traffic_rule`: Create or update complex traffic rules.
 
 ### Diagnostics (SSH)
 
