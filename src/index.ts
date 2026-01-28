@@ -7,6 +7,10 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
+import { RestrictedManager } from './restricted-manager.js';
+import { FirewallManager } from './firewall-manager.js';
+import { IotVlanManager } from './iot-vlan-manager.js';
+import { QoSManager } from './qos-manager.js';
 
 // Load environment variables
 dotenv.config();
@@ -37,6 +41,20 @@ const ssh = process.env.SSH_HOST ? new UnifiSSH(
   process.env.SSH_USERNAME || 'root',
   process.env.SSH_PASSWORD || ''
 ) : null;
+
+// Initialize Managers
+const restrictedManager = new RestrictedManager();
+const firewallManager = new FirewallManager(unifi);
+const iotManager = new IotVlanManager(unifi, {
+    ouiPatterns: ['Tuya', 'Espressif', 'Shenzhen', 'Xiaomi'],
+    hostnamePatterns: ['iot', 'smart', 'cam', 'plug', 'bulb'],
+    fingerprintPatterns: ['tasmota', 'wled', 'shelly']
+});
+const qosManager = new QoSManager(unifi, {
+    vipMacs: (process.env.VIP_MACS || '').split(',').filter(Boolean),
+    iotLowGroupId: process.env.IOT_LOW_GROUP_ID || '',
+    iotKeywords: ['iot', 'cam', 'plug', 'tv', 'roku', 'sonos']
+});
 
 // Helper to format bytes
 function formatBytes(bytes: number, decimals = 2) {
@@ -333,6 +351,133 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ['mac']
       },
+    },
+    {
+      name: 'block_restricted_youtube',
+      description: 'Block YouTube for all Restricted devices',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'unblock_restricted_youtube',
+      description: 'Unblock YouTube for all Restricted devices',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'get_restricted_youtube_status',
+      description: 'Check if YouTube is currently blocked for Restricted devices',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'detect_iot_devices',
+      description: 'Identify potential IoT devices that are not on the IoT VLAN',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          iotVlanId: { type: 'string', description: 'Optional IoT VLAN ID to exclude' }
+        }
+      }
+    },
+    {
+      name: 'migrate_iot_devices',
+      description: 'Propose migration of detected IoT devices to a target network',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          targetNetworkId: { type: 'string', description: 'ID of the target network' },
+          dryRun: { type: 'boolean', description: 'Whether to perform a dry run (default: true)' }
+        },
+        required: ['targetNetworkId']
+      }
+    },
+    {
+      name: 'enforce_iot_limits',
+      description: 'Throttle high-bandwidth IoT devices',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          thresholdMbps: { type: 'number', description: 'Bandwidth threshold in Mbps (default: 5)' }
+        }
+      }
+    },
+    {
+      name: 'protect_vips',
+      description: 'Ensure VIP devices are not throttled',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          defaultGroupId: { type: 'string', description: 'Default user group ID for VIPs' }
+        },
+        required: ['defaultGroupId']
+      }
+    },
+    {
+      name: 'ensure_traffic_rule',
+      description: 'Create or update a complex traffic rule',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          description: { type: 'string' },
+          action: { type: 'string', enum: ['BLOCK', 'ALLOW', 'ISOLATE'] },
+          matching_target: { type: 'string', enum: ['NETWORK', 'DOMAIN', 'APP', 'APP_GROUP', 'IP_GROUP'] },
+          target_network_ids: { type: 'array', items: { type: 'string' } },
+          target_device_ids: { type: 'array', items: { type: 'string' } },
+          target_app_ids: { type: 'array', items: { type: 'string' } },
+          enabled: { type: 'boolean' }
+        },
+        required: ['description', 'action', 'matching_target']
+      }
+    },
+    {
+      name: 'get_deep_dive',
+      description: 'Perform a deep dive into network health, DPI stats, and active client traffic',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'get_events',
+      description: 'Get recent network events',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          hours: { type: 'number', description: 'Number of hours to look back (default: 24)' }
+        }
+      }
+    },
+    {
+      name: 'set_client_user_group',
+      description: 'Assign a client to a specific user group (for throttling)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          client_id: { type: 'string', description: 'The _id of the client (not MAC)' },
+          group_id: { type: 'string', description: 'The _id of the user group' }
+        },
+        required: ['client_id', 'group_id']
+      }
+    },
+    {
+      name: 'create_user_group',
+      description: 'Create a new user group with bandwidth limits',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Name of the group' },
+          down: { type: 'number', description: 'Download limit in Kbps (-1 for unlimited)' },
+          up: { type: 'number', description: 'Upload limit in Kbps (-1 for unlimited)' }
+        },
+        required: ['name']
+      }
     }
   ],
 }));
@@ -772,6 +917,150 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     }, null, 2)
                 }]
             };
+        }
+
+        case 'block_restricted_youtube': {
+          await restrictedManager.blockYouTube(unifi);
+          return { content: [{ type: 'text', text: 'YouTube blocked for Restricted devices' }] };
+        }
+
+        case 'unblock_restricted_youtube': {
+          await restrictedManager.unblockYouTube(unifi);
+          return { content: [{ type: 'text', text: 'YouTube unblocked for Restricted devices' }] };
+        }
+
+        case 'get_restricted_youtube_status': {
+          const blocked = await restrictedManager.isYouTubeBlocked(unifi);
+          return { content: [{ type: 'text', text: `YouTube is ${blocked ? 'BLOCKED' : 'ALLOWED'} for Restricted devices` }] };
+        }
+
+        case 'detect_iot_devices': {
+          const { iotVlanId } = args as any;
+          const devices = await iotManager.detectIotDevices(iotVlanId);
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(devices.map(d => ({
+                name: d.name || d.hostname || d.mac,
+                mac: d.mac,
+                ip: d.ip,
+                oui: d.oui,
+                network_id: d.network_id
+              })), null, 2)
+            }]
+          };
+        }
+
+        case 'migrate_iot_devices': {
+          const { targetNetworkId, dryRun = true } = args as any;
+          const devices = await iotManager.detectIotDevices();
+          const results = await iotManager.migrateDevices(devices, targetNetworkId, dryRun);
+          return { content: [{ type: 'text', text: results.join('\n') }] };
+        }
+
+        case 'enforce_iot_limits': {
+          const { thresholdMbps = 5 } = args as any;
+          const clients = await unifi.getClients();
+          await qosManager.enforceIoTLimits(clients, thresholdMbps);
+          return { content: [{ type: 'text', text: `Enforced IoT limits with threshold ${thresholdMbps} Mbps` }] };
+        }
+
+        case 'protect_vips': {
+          const { defaultGroupId } = args as any;
+          const clients = await unifi.getClients();
+          await qosManager.protectVIPs(clients, defaultGroupId);
+          return { content: [{ type: 'text', text: `Protected VIP devices and restored to group ${defaultGroupId}` }] };
+        }
+
+        case 'ensure_traffic_rule': {
+          await firewallManager.ensureTrafficRule(args as any);
+          return { content: [{ type: 'text', text: `Ensured traffic rule: ${(args as any).description}` }] };
+        }
+
+        case 'get_deep_dive': {
+          const sites = await unifi.getSites();
+          const site = sites[0];
+          let healthInfo = {};
+          if (site && site.health) {
+              const wan = site.health.find((h: any) => h.subsystem === 'wan');
+              if (wan && wan['gw_system-stats']) {
+                  healthInfo = {
+                      cpu: wan['gw_system-stats'].cpu,
+                      mem: wan['gw_system-stats'].mem
+                  };
+              }
+          }
+
+          const apps = await unifi.getDPIApps();
+          const topApps = apps.sort((a: any, b: any) => (b.rx_bytes + b.tx_bytes) - (a.rx_bytes + a.tx_bytes)).slice(0, 10).map((d: any) => ({
+              app: `${d.cat || 'Unknown'}/${d.app || 'Unknown'}`,
+              traffic: formatBytes(d.rx_bytes + d.tx_bytes)
+          }));
+
+          const clients = await unifi.getClients();
+          const activeClients = clients
+              .filter(c => (c.rx_rate || 0) > 0 || (c.tx_rate || 0) > 0)
+              .sort((a, b) => ((b.rx_rate || 0) + (b.tx_rate || 0)) - ((a.rx_rate || 0) + (a.tx_rate || 0)))
+              .slice(0, 10)
+              .map(c => ({
+                  client: c.hostname || c.name || c.mac,
+                  oui: c.oui || 'Unknown',
+                  rate: (((c.rx_rate || 0) + (c.tx_rate || 0)) / 1024 / 1024 * 8).toFixed(2) + ' Mbps'
+              }));
+
+          const alarms = await unifi.getAlarms({ within: 24 });
+          const threats = alarms.filter((a: any) => {
+              const msg = (a.msg || '').toLowerCase();
+              const key = (a.key || '').toLowerCase();
+              return key.includes('ips') || msg.includes('p2p') || msg.includes('corporate privacy');
+          }).slice(0, 5).map((t: any) => ({
+              time: new Date(t.time || t.datetime).toISOString(),
+              msg: t.msg
+          }));
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                  health: healthInfo,
+                  topApps,
+                  activeClients,
+                  recentThreats: threats
+              }, null, 2)
+            }]
+          };
+        }
+
+        case 'get_events': {
+          const hours = (args as any).hours || 24;
+          const controller = (unifi as any).controller;
+          const events = await new Promise<any[]>((resolve, reject) => {
+              controller.getEvents('default', hours)
+                  .then((data: any) => resolve(data || []))
+                  .catch((err: any) => reject(err));
+          });
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(events.slice(0, 50).map(e => ({
+                  time: new Date(e.time || e.datetime).toISOString(),
+                  msg: e.msg,
+                  user: e.user
+              })), null, 2)
+            }]
+          };
+        }
+
+        case 'set_client_user_group': {
+          const { client_id, group_id } = args as any;
+          await unifi.setUserGroup(client_id, group_id);
+          return { content: [{ type: 'text', text: `Client ${client_id} assigned to group ${group_id}` }] };
+        }
+
+        case 'create_user_group': {
+          const { name, down = -1, up = -1 } = args as any;
+          const result = await unifi.createUserGroup(name, down, up);
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
         
         default:

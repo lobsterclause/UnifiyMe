@@ -14,7 +14,8 @@ describe('UnifiMonitor Mitigation Logic', () => {
       unblockClient: vi.fn(),
       getUserGroups: vi.fn().mockResolvedValue([
         { _id: 'default_id', name: 'Default' },
-        { _id: 'throttle_id', name: 'Throttled' }
+        { _id: 'throttle_id', name: 'Throttled' },
+        { _id: 'iot_low_id', name: 'IoT Low Priority' }
       ]),
       setUserGroup: vi.fn(),
       getSiteSysinfo: vi.fn().mockResolvedValue([{ subsystem: 'test' }]),
@@ -77,5 +78,55 @@ describe('UnifiMonitor Mitigation Logic', () => {
     expect(mockClient.setUserGroup).toHaveBeenCalledWith('offender_id', 'original_id');
 
     vi.useRealTimers();
+  });
+
+  it('should apply aggressive IoT throttling when CPU load > 80%', async () => {
+    // Mock VIP_MACS
+    process.env.VIP_MACS = 'vip-mac';
+
+    // Setup groups
+    await (monitor as any).setupGroups();
+
+    // High CPU load (80% of 4 cores = 3.2)
+    mockClient.getDevices.mockResolvedValue([
+      {
+        model: 'UDM',
+        sys_stats: {
+          loadavg_1: '3.5',
+          mem_used: 1000 * 1024 * 1024,
+        }
+      }
+    ]);
+
+    // IoT device using 3 Mbps (above 2 Mbps aggressive threshold, below 5 Mbps normal)
+    mockClient.getClients.mockResolvedValue([
+      { _id: 'iot_id', mac: 'iot-mac', name: 'IoT-Camera', rx_rate: 3 * 1024 * 1024 / 8, tx_rate: 0, usergroup_id: 'default_id', oui: 'Generic' },
+      { _id: 'vip_id', mac: 'vip-mac', name: 'VIP-Workstation', rx_rate: 10 * 1024 * 1024 / 8, tx_rate: 0, usergroup_id: 'default_id' }
+    ]);
+
+    await (monitor as any).cycle();
+
+    expect(mockClient.setUserGroup).toHaveBeenCalledWith('iot_id', 'iot_low_id');
+    expect(mockClient.setUserGroup).not.toHaveBeenCalledWith('vip_id', 'iot_low_id');
+  });
+
+  it('should protect VIPs from being in the low priority group', async () => {
+    process.env.VIP_MACS = 'vip-mac';
+
+    // Setup groups
+    await (monitor as any).setupGroups();
+
+    mockClient.getDevices.mockResolvedValue([
+      { model: 'UDM', sys_stats: { loadavg_1: '1.0' } }
+    ]);
+
+    // VIP accidentally in low priority group
+    mockClient.getClients.mockResolvedValue([
+      { _id: 'vip_id', mac: 'vip-mac', name: 'VIP', rx_rate: 0, tx_rate: 0, usergroup_id: 'iot_low_id' }
+    ]);
+
+    await (monitor as any).cycle();
+
+    expect(mockClient.setUserGroup).toHaveBeenCalledWith('vip_id', 'default_id');
   });
 });

@@ -338,6 +338,30 @@ export class UnifiClient {
     });
   }
 
+  async createNetwork(payload: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/networkconf`, 'POST', payload)
+        .then((data: any) => resolve(data))
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async updateNetwork(id: string, payload: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/networkconf/${id}`, 'PUT', payload)
+        .then((data: any) => resolve(data))
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async createFirewallRule(payload: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/firewallrule`, 'POST', payload)
+        .then((data: any) => resolve(data))
+        .catch((err: any) => reject(err));
+    });
+  }
+
   async getFirewallRules(): Promise<any[]> {
     return new Promise((resolve, reject) => {
       this.controller.getFirewallRules()

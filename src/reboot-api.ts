@@ -15,8 +15,8 @@ async function main() {
     console.log('Connecting...');
     await unifi.connect();
     
-    // UDM Base MAC from previous output
-    const mac = '00:00:00:00:00:00'; 
+    // UDM Base MAC from environment or placeholder
+    const mac = process.env.TARGET_DEVICE_MAC || '00:00:00:00:00:00';
     console.log(`Sending restart command to device ${mac}...`);
     
     await (unifi as any).controller.restartDevice(mac);

@@ -1,0 +1,20 @@
+Connecting to UniFi...
+Finding IoT VLAN...
+IoT VLAN (20) not found in UniFi. Please create it first.
+Detecting IoT devices on the network...
+
+--- Detected 11 IoT Candidates ---
+- LIFX-Color-702321 (Vendor: Lifi Labs Management Pty Ltd, IP: undefined)
+- C210 (Vendor: TP-Link Corporation Limited, IP: 192.168.1.135)
+- KP405 (Vendor: TP-Link Corporation Limited, IP: 192.168.1.85)
+- C210 (Vendor: TP-Link Corporation Limited, IP: 192.168.1.104)
+- Google-Nest-Hub (Vendor: Google, Inc., IP: undefined)
+- 43TCLRokuTV (Vendor: Hui Zhou Gaoshengda Technology Co.,LTD, IP: 192.168.1.x)
+- ESP_1A2FAA (Vendor: Espressif Inc., IP: 192.168.1.41)
+- 38:b8:00:c8:c0:f9 (Vendor: Wistron Neweb Corporation, IP: 192.168.1.224)
+- Google-Nest-Mini (Vendor: Google, Inc., IP: 192.168.1.100)
+- EP25 (Vendor: TP-Link Corporation Limited, IP: 192.168.1.113)
+- EP25 (Vendor: TP-Link Corporation Limited, IP: 192.168.1.27)
+
+--- Ensuring Firewall Rules (Traffic Rules) ---
+Skipping firewall rules: VLAN IDs not found.

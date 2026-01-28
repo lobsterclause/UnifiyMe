@@ -1,7 +1,5 @@
+import 'dotenv/config';
 import { UnifiClient } from './unifi/client.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 async function main() {
   const unifi = new UnifiClient(
@@ -12,11 +10,11 @@ async function main() {
   );
 
   try {
+    console.log('Connecting to UniFi...');
     await unifi.connect();
-    const sites = await unifi.getSites();
-    console.log('Sites:', JSON.stringify(sites.map(s => ({ name: s.name, desc: s.desc, id: s._id })), null, 2));
+    console.log('Login successful!');
   } catch (err: any) {
-    console.error('Error:', err.message);
+    console.error('Login failed:', err.message);
   }
 }
 

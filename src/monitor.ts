@@ -1,4 +1,5 @@
 import { UnifiClient } from './unifi/client.js';
+import { QoSManager } from './qos-manager.js';
 import dotenv from 'dotenv';
 import { setTimeout } from 'timers/promises';
 
@@ -7,11 +8,17 @@ dotenv.config();
 // Configuration
 const POLL_INTERVAL_MS = 60_000;
 const CRITICAL_LOAD_THRESHOLD = 4.0;
+const AGGRESSIVE_CPU_THRESHOLD = 3.2; // 80% of 4 cores
 const CRITICAL_MEM_THRESHOLD_MB = 1800; // ~90% of 2GB
 const PENALTY_DURATION_MS = 10 * 60 * 1000; // 10 minutes for throttle
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const BW_THRESHOLD_MBPS = 15; // 15 Mbps spike threshold
 const THROTTLE_RATE_KBPS = 2000; // 2 Mbps limit
+const IOT_LOW_PRIORITY_GROUP_NAME = 'IoT Low Priority';
+const IOT_THROTTLE_RATE_DOWN_KBPS = 2000; // 2 Mbps
+const IOT_THROTTLE_RATE_UP_KBPS = 250; // 250 Kbps
+const IOT_NORMAL_THRESHOLD_MBPS = 5;
+const IOT_AGGRESSIVE_THRESHOLD_MBPS = 2;
 
 interface PenaltyRecord {
     mac: string;
@@ -23,8 +30,10 @@ interface PenaltyRecord {
 
 export class UnifiMonitor {
     private client: UnifiClient;
+    private qosManager: QoSManager | null = null;
     private penaltyBox: Map<string, PenaltyRecord> = new Map();
     private throttledGroupId: string | null = null;
+    private iotLowGroupId: string | null = null;
     private defaultGroupId: string | null = null;
 
     constructor(client?: UnifiClient) {
@@ -74,6 +83,7 @@ export class UnifiMonitor {
     private async setupGroups() {
         const groups = await this.client.getUserGroups();
         const throttled = groups.find(g => g.name === 'Throttled');
+        const iotLow = groups.find(g => g.name === IOT_LOW_PRIORITY_GROUP_NAME);
         const defaultGroup = groups.find(g => g.name === 'Default');
         
         if (throttled) {
@@ -88,8 +98,28 @@ export class UnifiMonitor {
             }
         }
 
+        if (iotLow) {
+            this.iotLowGroupId = iotLow._id;
+        } else {
+            console.log(`Creating "${IOT_LOW_PRIORITY_GROUP_NAME}" user group (2Mbps/250Kbps)...`);
+            const newGroup = await this.client.createUserGroup(IOT_LOW_PRIORITY_GROUP_NAME, IOT_THROTTLE_RATE_DOWN_KBPS, IOT_THROTTLE_RATE_UP_KBPS);
+            if (newGroup && newGroup[0]) {
+                this.iotLowGroupId = newGroup[0]._id;
+            } else {
+                throw new Error(`Failed to create or find ${IOT_LOW_PRIORITY_GROUP_NAME} group`);
+            }
+        }
+
         if (defaultGroup) {
             this.defaultGroupId = defaultGroup._id;
+        }
+
+        if (this.iotLowGroupId) {
+            const vipMacs = (process.env.VIP_MACS || '').split(',').map(m => m.trim().toLowerCase()).filter(m => m);
+            this.qosManager = new QoSManager(this.client, {
+                vipMacs,
+                iotLowGroupId: this.iotLowGroupId
+            });
         }
     }
 
@@ -120,7 +150,24 @@ export class UnifiMonitor {
 
         console.log(`[Heartbeat] Load: ${load.toFixed(2)} | Mem: ${Math.round(memUsed)} MB | Boxed: ${this.penaltyBox.size}`);
 
-        // 3. Evaluate Critical State
+        // 3. Dynamic QoS & IoT Optimization
+        if (this.qosManager) {
+            const clients = await this.client.getClients();
+            
+            // Protect VIPs
+            await this.qosManager.protectVIPs(clients, this.defaultGroupId || '');
+
+            // Determine threshold based on CPU load
+            let iotThreshold = IOT_NORMAL_THRESHOLD_MBPS;
+            if (load > AGGRESSIVE_CPU_THRESHOLD) {
+                console.log(`[QoS] High CPU detected (${load.toFixed(2)}), using aggressive IoT throttling threshold (${IOT_AGGRESSIVE_THRESHOLD_MBPS} Mbps)`);
+                iotThreshold = IOT_AGGRESSIVE_THRESHOLD_MBPS;
+            }
+
+            await this.qosManager.enforceIoTLimits(clients, iotThreshold);
+        }
+
+        // 4. Evaluate Critical State
         if (load > CRITICAL_LOAD_THRESHOLD || memUsed > CRITICAL_MEM_THRESHOLD_MB) {
             console.warn('⚠️  CRITICAL SYSTEM STATE DETECTED');
             await this.diagnoseAndMitigate(load, memUsed);

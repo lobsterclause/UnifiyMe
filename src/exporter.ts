@@ -59,6 +59,18 @@ const throttledCount = new Gauge({
   registers: [register]
 });
 
+const iotVlanTraffic = new Gauge({
+  name: 'unifi_iot_vlan_traffic_bps',
+  help: 'Total traffic from IoT VLAN',
+  registers: [register]
+});
+
+const iotClientCount = new Gauge({
+  name: 'unifi_iot_client_count',
+  help: 'Number of clients on IoT VLAN',
+  registers: [register]
+});
+
 const unifi = new UnifiClient(
   process.env.UNIFI_HOST!,
   process.env.UNIFI_USERNAME!,
@@ -108,6 +120,21 @@ async function updateMetrics() {
     if (throttledGroup) {
         const throttled = clients.filter(c => c.usergroup_id === throttledGroup._id);
         throttledCount.set(throttled.length);
+    }
+
+    // IoT VLAN Metrics
+    const networks = await unifi.getNetworkConf();
+    const iotNetwork = networks.find((n: any) => n.vlan === 20 || n.name === 'IoT Network');
+    
+    if (iotNetwork) {
+        const iotClients = clients.filter(c => c.network_id === iotNetwork._id);
+        iotClientCount.set(iotClients.length);
+        
+        const totalIotTraffic = iotClients.reduce((acc, c) => acc + ((c.rx_rate || 0) + (c.tx_rate || 0)) * 8, 0);
+        iotVlanTraffic.set(totalIotTraffic);
+    } else {
+        iotClientCount.set(0);
+        iotVlanTraffic.set(0);
     }
 
     // Update traffic for top 20 clients (to avoid metric explosion)

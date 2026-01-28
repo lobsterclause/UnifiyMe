@@ -1,7 +1,5 @@
+import 'dotenv/config';
 import { UnifiClient } from './unifi/client.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 async function main() {
   const unifi = new UnifiClient(
@@ -13,8 +11,12 @@ async function main() {
 
   try {
     await unifi.connect();
-    const sites = await unifi.getSites();
-    console.log('Sites:', JSON.stringify(sites.map(s => ({ name: s.name, desc: s.desc, id: s._id })), null, 2));
+    console.log('Connected.');
+
+    console.log('--- Firewall Rules ---');
+    const rules = await unifi.getFirewallRules();
+    console.log(JSON.stringify(rules, null, 2));
+
   } catch (err: any) {
     console.error('Error:', err.message);
   }

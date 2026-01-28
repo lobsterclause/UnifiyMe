@@ -14,11 +14,11 @@ async function main() {
   try {
     await unifi.connect();
     const clients = await unifi.getClients();
-    const targetIp = '192.168.1.x';
+    const targetIp = process.env.TARGET_CLIENT_IP || '192.168.1.x';
     
     // Check both active and history
     // console.log(`Searching ${clients.length} clients...`);
-    const potentialTargets = clients.filter(c => c.ip && c.ip.startsWith('192.168.1.10')); // Narrow down
+    const potentialTargets = clients.filter(c => c.ip && c.ip.startsWith('192.168.1.')); // Narrow down
     
     if (potentialTargets.length > 0) {
         console.log(`\n--- Found Potential Matches ---`);
