@@ -61,9 +61,37 @@ This server includes specialized optimizations for UniFi controllers:
 
 ## Usage
 
-### MCP Server (Claude Desktop)
+### 1. Installation via npm (Published)
 
-Add the following to your `claude_desktop_config.json`:
+This is the recommended way for most users. You can run the server directly using `npx` in your Claude Desktop configuration.
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "unifyme": {
+      "command": "npx",
+      "args": ["-y", "unifiyme"],
+      "env": {
+        "UNIFI_HOST": "https://<CONTROLLER-IP>",
+        "UNIFI_USERNAME": "<YOUR-USERNAME>",
+        "UNIFI_PASSWORD": "<YOUR-PASSWORD>",
+        "UNIFI_SITE": "default"
+      }
+    }
+  }
+}
+```
+
+### 2. Local Development Setup
+
+If you prefer to run from source or are contributing:
+
+1. Clone the repository.
+2. Install dependencies: `npm install`
+3. Build the project: `npm run build`
+4. Use the following config:
 
 ```json
 {
@@ -75,10 +103,7 @@ Add the following to your `claude_desktop_config.json`:
         "UNIFI_HOST": "...",
         "UNIFI_USERNAME": "...",
         "UNIFI_PASSWORD": "...",
-        "UNIFI_SITE": "default",
-        "SSH_HOST": "...",
-        "SSH_USERNAME": "...",
-        "SSH_PASSWORD": "..."
+        "UNIFI_SITE": "default"
       }
     }
   }
