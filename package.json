@@ -16,9 +16,38 @@
     "format": "prettier --write src/**/*.ts",
     "restricted-yt": "tsx src/restricted-yt-blocker.ts"
   },
-  "keywords": [],
+  "keywords": [
+    "unifi",
+    "mcp",
+    "mcp-server",
+    "network-monitoring",
+    "iot",
+    "automation"
+  ],
   "author": "Gabriel Phoenix",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lobsterclause/UnifiyMe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lobsterclause/UnifiyMe/issues"
+  },
+  "homepage": "https://github.com/lobsterclause/UnifiyMe#readme",
+  "files": [
+    "dist/index.js",
+    "dist/unifi/",
+    "dist/firewall-manager.js",
+    "dist/iot-vlan-manager.js",
+    "dist/qos-manager.js",
+    "dist/youtube-manager.js",
+    "dist/gateway.js",
+    "dist/monitor.js",
+    "dist/exporter.js",
+    "dist/discord-bot.js",
+    "LICENSE",
+    "README.md"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@types/ssh2": "^1.15.5",
