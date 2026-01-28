@@ -156,6 +156,10 @@ docker-compose up -d
 - `run_ssh_command`: Execute a command directly on the router.
 - `get_router_logs`: Fetch system logs from the router.
 
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report issues, suggest features, and submit pull requests.
+
 ## License
 
-ISC
+This project is licensed under the [MIT License](LICENSE).
