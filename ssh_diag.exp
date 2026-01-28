@@ -1,9 +1,9 @@
 #!/usr/bin/expect -f
 
 set timeout 120
-set ip "192.168.1.1"
-set user "root"
-set password "9AMercKLfmd\$7Hhk"
+set ip [env SSH_HOST]
+set user [env SSH_USERNAME]
+set password [env SSH_PASSWORD]
 set command "top -b -n 1 -o %MEM | head -n 20"
 
 # -T disables pseudo-tty allocation (avoids shell hang if PTYs are exhausted)
