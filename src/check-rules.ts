@@ -14,8 +14,16 @@ async function main() {
     console.log('Connected.');
 
     console.log('--- Traffic Rules ---');
-    const rules = await unifi.getTrafficRules();
-    console.log(JSON.stringify(rules, null, 2));
+    try {
+      const rules = await unifi.getTrafficRules();
+      console.log(JSON.stringify(rules, null, 2));
+    } catch (e: any) {
+      console.error('Failed to get traffic rules:', e.response?.data || e.message);
+    }
+
+    console.log('--- Firewall Rules ---');
+    const fwRules = await unifi.getFirewallRules();
+    console.log(JSON.stringify(fwRules, null, 2));
 
   } catch (err: any) {
     console.error('Error:', err.message);

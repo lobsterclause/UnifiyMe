@@ -11,9 +11,9 @@ export class UnifiSSH {
       password,
       readyTimeout: 60000,
       algorithms: {
-        kex: ['diffie-hellman-group1-sha1', 'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521', 'diffie-hellman-group-exchange-sha256', 'diffie-hellman-group14-sha1'],
-        cipher: ['aes128-ctr', 'aes192-ctr', 'aes256-ctr', 'aes128-cbc', '3des-cbc'],
-        serverHostKey: ['ssh-rsa', 'ssh-dss']
+        kex: ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'diffie-hellman-group1-sha1', 'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521', 'diffie-hellman-group-exchange-sha256', 'diffie-hellman-group14-sha1'],
+        cipher: ['aes128-ctr', 'aes192-ctr', 'aes256-ctr', 'aes128-cbc', '3des-cbc', 'aes128-gcm@openssh.com', 'aes256-gcm@openssh.com'],
+        serverHostKey: ['ssh-ed25519', 'ssh-rsa', 'ssh-dss']
       } as any
     };
   }

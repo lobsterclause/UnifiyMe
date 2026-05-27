@@ -86,3 +86,9 @@ typings/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Serena LSP workspace state
+.serena/
+
+# SSH debug log from expect scripts
+ssh_debug.log

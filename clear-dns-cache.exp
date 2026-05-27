@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+# Reads SSH_HOST, SSH_USER, SSH_PASSWORD from the environment.
+
+set timeout 30
+set host $env(SSH_HOST)
+set user $env(SSH_USER)
+set password $env(SSH_PASSWORD)
+
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$host
+
+expect {
+  "password:" {
+    send "$password\r"
+    exp_continue
+  }
+  "\\$" {
+    send "clear dns cache\r"
+  }
+}
+
+expect "\\$" {
+  send "exit\r"
+}
+
+expect eof

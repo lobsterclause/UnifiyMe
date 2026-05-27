@@ -1,0 +1,27 @@
+#!/usr/bin/expect -f
+# Reads SSH_HOST, SSH_USER, SSH_PASSWORD from the environment.
+
+set timeout 30
+set host $env(SSH_HOST)
+set user $env(SSH_USER)
+set password $env(SSH_PASSWORD)
+
+log_file -a ssh_debug.log
+
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$host
+
+expect {
+  "password:" {
+    send "$password\r"
+    exp_continue
+  }
+  -re "\[#\\$\]" {
+    # Check for dnsmasq logs and specifically look for "clearing cache" or similar
+    send "grep dnsmasq /var/log/messages | tail -n 100\r"
+    expect -re "\[#\\$\]"
+    # Also check if the command itself was logged if shell history is active or via other means
+    send "exit\r"
+  }
+}
+
+expect eof

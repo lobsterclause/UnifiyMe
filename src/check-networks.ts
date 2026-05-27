@@ -17,6 +17,10 @@ async function main() {
     const networks = await unifi.getNetworkConf();
     console.log(JSON.stringify(networks, null, 2));
 
+    console.log('--- WLANs ---');
+    const wlans = await unifi.getWlanConf();
+    console.log(JSON.stringify(wlans, null, 2));
+
   } catch (err: any) {
     console.error('Error:', err.message);
   }

@@ -15,6 +15,17 @@ export interface TrafficRulePayload {
   [key: string]: any;
 }
 
+export interface PortForwardPayload {
+  name: string;
+  enabled: boolean;
+  proto: 'tcp' | 'udp' | 'tcp_udp';
+  fwd: string;
+  fwd_port: string;
+  dst_port: string;
+  src: string;
+  [key: string]: any;
+}
+
 export class FirewallManager {
   constructor(private unifi: UnifiClient) {}
 
@@ -32,7 +43,12 @@ export class FirewallManager {
       // Check if update is needed
       let needsUpdate = false;
       for (const key of Object.keys(payload)) {
-        if (existing[key] !== payload[key]) {
+        if (Array.isArray(payload[key]) && Array.isArray(existing[key])) {
+          if (JSON.stringify([...payload[key]].sort()) !== JSON.stringify([...existing[key]].sort())) {
+            needsUpdate = true;
+            break;
+          }
+        } else if (existing[key] !== payload[key]) {
           needsUpdate = true;
           break;
         }
@@ -58,5 +74,37 @@ export class FirewallManager {
     const networks = await this.unifi.getNetworkConf();
     const mainNetwork = networks.find((n: any) => n.is_default === true || n.vlan === 1 || n.attr_hidden_id === 'LAN');
     return mainNetwork ? mainNetwork._id : null;
+  }
+
+  async ensurePortForwardRule(payload: PortForwardPayload): Promise<void> {
+    const existingRules = await this.unifi.getPortForwardRules();
+    const existing = existingRules.find((r: any) => r.name === payload.name);
+
+    if (!existing) {
+      console.log(`Creating port forward rule: ${payload.name}`);
+      await this.unifi.createPortForwardRule(payload);
+    } else {
+      // Check if update is needed
+      let needsUpdate = false;
+      for (const key of Object.keys(payload)) {
+        if (Array.isArray(payload[key]) && Array.isArray(existing[key])) {
+          if (JSON.stringify([...payload[key]].sort()) !== JSON.stringify([...existing[key]].sort())) {
+            needsUpdate = true;
+            break;
+          }
+        } else if (existing[key] !== payload[key]) {
+          needsUpdate = true;
+          break;
+        }
+      }
+
+      if (needsUpdate) {
+        console.log(`Updating port forward rule: ${payload.name}`);
+        await this.unifi.updatePortForwardRule(existing._id, {
+          ...existing,
+          ...payload
+        });
+      }
+    }
   }
 }

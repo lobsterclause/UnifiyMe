@@ -60,4 +60,67 @@ describe('FirewallManager', () => {
       action: 'BLOCK'
     }));
   });
+
+  it('should support domain-based traffic rules', async () => {
+    mockUnifi.getTrafficRules.mockResolvedValue([]);
+    mockUnifi.createTrafficRule.mockResolvedValue({ _id: 'domain_rule_id' });
+
+    await manager.ensureTrafficRule({
+      description: 'Block YouTube',
+      action: 'BLOCK',
+      matching_target: 'DOMAIN',
+      target_domain_ids: ['youtube.com'],
+      target_device_ids: ['some_device_id']
+    });
+
+    expect(mockUnifi.createTrafficRule).toHaveBeenCalledWith(expect.objectContaining({
+      description: 'Block YouTube',
+      matching_target: 'DOMAIN',
+      target_domain_ids: ['youtube.com']
+    }));
+  });
+
+  it('should update a traffic rule if array parameters differ', async () => {
+    mockUnifi.getTrafficRules.mockResolvedValue([
+      {
+        _id: 'existing_id',
+        description: 'Block IoT to Main',
+        action: 'BLOCK',
+        matching_target: 'NETWORK',
+        target_network_ids: ['old_vlan_id']
+      }
+    ]);
+
+    await manager.ensureTrafficRule({
+      description: 'Block IoT to Main',
+      action: 'BLOCK',
+      matching_target: 'NETWORK',
+      target_network_ids: ['new_vlan_id']
+    });
+
+    expect(mockUnifi.updateTrafficRule).toHaveBeenCalledWith('existing_id', expect.objectContaining({
+      target_network_ids: ['new_vlan_id']
+    }));
+  });
+
+  it('should not update a traffic rule if array parameters are the same but different order', async () => {
+    mockUnifi.getTrafficRules.mockResolvedValue([
+      {
+        _id: 'existing_id',
+        description: 'Multi-device Rule',
+        action: 'BLOCK',
+        matching_target: 'NETWORK',
+        target_device_ids: ['device1', 'device2']
+      }
+    ]);
+
+    await manager.ensureTrafficRule({
+      description: 'Multi-device Rule',
+      action: 'BLOCK',
+      matching_target: 'NETWORK',
+      target_device_ids: ['device2', 'device1']
+    });
+
+    expect(mockUnifi.updateTrafficRule).not.toHaveBeenCalled();
+  });
 });

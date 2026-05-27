@@ -1,5 +1,6 @@
 import { UnifiClient } from './unifi/client.js';
 import dotenv from 'dotenv';
+import { formatDoH, formatDoT } from './utils/nextdns.js';
 
 dotenv.config();
 
@@ -22,14 +23,24 @@ async function main() {
     
     if (potentialTargets.length > 0) {
         console.log(`\n--- Found Potential Matches ---`);
+        const configId = process.env.NEXTDNS_CONFIG_ID || '6ca463';
         potentialTargets.forEach(target => {
-            console.log(`IP: ${target.ip}, Name: ${target.name || target.hostname}, Vendor: ${target.oui}`);
+            const name = target.name || target.hostname || 'Unknown';
+            console.log(`IP: ${target.ip}, Name: ${name}, Vendor: ${target.oui}`);
+            console.log(`  NextDNS DoT: ${formatDoT(name, configId)}`);
+            console.log(`  NextDNS DoH: ${formatDoH(name, configId)}`);
         });
     } else {
         console.log('No partial IP matches found either.');
         // Fallback: Show all active
         console.log('\n--- All Active IPs ---');
-        clients.filter(c => c.ip).forEach(c => console.log(`${c.ip} - ${c.name || c.hostname}`));
+        const configId = process.env.NEXTDNS_CONFIG_ID || '6ca463';
+        clients.filter(c => c.ip).forEach(c => {
+            const name = c.name || c.hostname || 'Unknown';
+            console.log(`${c.ip} - ${name}`);
+            console.log(`  DoT: ${formatDoT(name, configId)}`);
+            console.log(`  DoH: ${formatDoH(name, configId)}`);
+        });
     }
 
   } catch (err: any) {

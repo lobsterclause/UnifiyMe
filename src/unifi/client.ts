@@ -212,6 +212,30 @@ export class UnifiClient {
     });
   }
 
+  async setClientAlias(client_id: string, name: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/user/${client_id}`, 'PUT', { name })
+        .then(() => resolve())
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async setClientTags(client_id: string, tags: string[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/user/${client_id}`, 'PUT', { tags })
+        .then(() => resolve())
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async setDeviceTags(device_id: string, tags: string[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/device/${device_id}`, 'PUT', { tags })
+        .then(() => resolve())
+        .catch((err: any) => reject(err));
+    });
+  }
+
   async unblockClient(mac: string): Promise<void> {
     if (this.gatewayUrl) {
         await fetch(`${this.gatewayUrl}/action/unblock`, {
@@ -346,7 +370,7 @@ export class UnifiClient {
 
   async getWlanConf(): Promise<any[]> {
     return new Promise((resolve, reject) => {
-      this.controller.getWlanConf()
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/wlanconf`)
         .then((data: any) => resolve(data || []))
         .catch((err: any) => reject(err));
     });
@@ -432,10 +456,50 @@ export class UnifiClient {
     });
   }
 
+  async getPortForwardRules(): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/portforward`)
+        .then((data: any) => resolve(data || []))
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async createPortForwardRule(payload: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/portforward`, 'POST', payload)
+        .then((data: any) => resolve(data))
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async updatePortForwardRule(id: string, payload: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/portforward/${id}`, 'PUT', payload)
+        .then((data: any) => resolve(data))
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async deletePortForwardRule(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/portforward/${id}`, 'DELETE')
+        .then(() => resolve())
+        .catch((err: any) => reject(err));
+    });
+  }
+
   async getDPIApps(): Promise<any[]> {
     return new Promise((resolve, reject) => {
       this.controller.customApiRequest(`/api/s/${this.site}/stat/dpi-apps`)
         .then((data: any) => resolve(data || []))
+        .catch((err: any) => reject(err));
+    });
+  }
+
+  async updateDevice(deviceId: string, payload: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.controller.customApiRequest(`/api/s/${this.site}/rest/device/${deviceId}`, 'PUT', payload)
+        .then((data: any) => resolve(data))
         .catch((err: any) => reject(err));
     });
   }
