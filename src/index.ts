@@ -13,7 +13,7 @@ import { IotVlanManager } from './iot-vlan-manager.js';
 import { QoSManager } from './qos-manager.js';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const server = new Server(
   {
@@ -431,6 +431,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           target_network_ids: { type: 'array', items: { type: 'string' } },
           target_device_ids: { type: 'array', items: { type: 'string' } },
           target_app_ids: { type: 'array', items: { type: 'string' } },
+          target_domain_ids: { type: 'array', items: { type: 'string' } },
           enabled: { type: 'boolean' }
         },
         required: ['description', 'action', 'matching_target']
@@ -478,17 +479,146 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ['name']
       }
+    },
+    {
+      name: 'list_user_groups',
+      description: 'List existing user groups with IDs, bandwidth limits, and member counts',
+      inputSchema: { type: 'object', properties: {} }
+    },
+    {
+      name: 'set_client_alias',
+      description: 'Set the friendly name (alias) on a client by MAC. This is the UniFi "name" field that overrides hostname.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          mac: { type: 'string', description: 'Client MAC address' },
+          name: { type: 'string', description: 'Friendly name to assign' }
+        },
+        required: ['mac', 'name']
+      }
+    },
+    {
+      name: 'set_client_note',
+      description: 'Set the freeform note field on a client by MAC',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          mac: { type: 'string', description: 'Client MAC address' },
+          note: { type: 'string', description: 'Note text (use empty string to clear)' }
+        },
+        required: ['mac', 'note']
+      }
+    },
+    {
+      name: 'list_device_tags',
+      description: 'List all tags currently applied to clients and devices, with counts and where they are used',
+      inputSchema: { type: 'object', properties: {} }
+    },
+    {
+      name: 'set_device_tags',
+      description: 'Set the tags array on a client or device by MAC. Replaces all existing tags. Auto-detects client vs device by MAC.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          mac: { type: 'string', description: 'Client or device MAC address' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Tag list to set (replaces existing tags)' },
+          target: { type: 'string', enum: ['auto', 'client', 'device'], description: 'Force target type (default: auto)' }
+        },
+        required: ['mac', 'tags']
+      }
+    },
+    {
+      name: 'get_port_forward_rules',
+      description: 'Get all configured port forwarding rules',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'ensure_port_forward_rule',
+      description: 'Create or update a port forwarding rule',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          enabled: { type: 'boolean' },
+          proto: { type: 'string', enum: ['tcp', 'udp', 'tcp_udp'] },
+          fwd: { type: 'string', description: 'Internal IP address' },
+          fwd_port: { type: 'string', description: 'Internal port' },
+          dst_port: { type: 'string', description: 'External port' },
+          src: { type: 'string', description: 'Source IP (usually "any")' }
+        },
+        required: ['name', 'enabled', 'proto', 'fwd', 'fwd_port', 'dst_port', 'src']
+      }
+    },
+    {
+      name: 'update_port_forward_rule',
+      description: 'Update an existing port forwarding rule by id. Pass any subset of fields to patch.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'The _id of the rule to update' },
+          payload: { type: 'object', description: 'Partial rule fields to update (name, enabled, proto, fwd, fwd_port, dst_port, src, etc.)' }
+        },
+        required: ['id', 'payload']
+      }
+    },
+    {
+      name: 'delete_port_forward_rule',
+      description: 'Delete a port forwarding rule by id.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'The _id of the rule to delete' }
+        },
+        required: ['id']
+      }
+    },
+    {
+      name: 'get_traffic_rules',
+      description: 'List all traffic rules (the modern unified rule system used by ensure_traffic_rule).',
+      inputSchema: { type: 'object', properties: {} }
+    },
+    {
+      name: 'update_traffic_rule',
+      description: 'Update an existing traffic rule by id. Pass any subset of fields to patch.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'The _id of the traffic rule to update' },
+          payload: { type: 'object', description: 'Partial rule fields to update (description, action, matching_target, enabled, target_*_ids, etc.)' }
+        },
+        required: ['id', 'payload']
+      }
+    },
+    {
+      name: 'delete_traffic_rule',
+      description: 'Delete a traffic rule by id.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'The _id of the traffic rule to delete' }
+        },
+        required: ['id']
+      }
     }
   ],
 }));
 
+let unifiConnected = false;
+async function ensureUnifiConnected() {
+  if (unifiConnected) return;
+  await unifi.connect();
+  unifiConnected = true;
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  
+
   try {
-      // Ensure connection is established (lazy connect or reconnect could be handled here)
-      // For now we assume the main connect call works, but in production we might want to check state
-      
+      await ensureUnifiConnected();
+
       switch (name) {
         case 'get_network_status': {
           const devices = await unifi.getDevicesBasic();
@@ -842,6 +972,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return { content: [{ type: 'text', text: JSON.stringify(config, null, 2) }] };
         }
 
+        case 'get_wlan_config': {
+          const wlans = await unifi.getWlanConf();
+          return { content: [{ type: 'text', text: JSON.stringify(wlans, null, 2) }] };
+        }
+
         case 'get_network_config': {
           const config = await unifi.getNetworkConf();
           return { content: [{ type: 'text', text: JSON.stringify(config, null, 2) }] };
@@ -1062,7 +1197,129 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const result = await unifi.createUserGroup(name, down, up);
           return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
-        
+
+        case 'list_user_groups': {
+          const groups = await unifi.getUserGroups();
+          const clients = await unifi.getClients();
+          const summary = groups.map((g: any) => ({
+            _id: g._id,
+            name: g.name,
+            qos_rate_max_down: g.qos_rate_max_down,
+            qos_rate_max_up: g.qos_rate_max_up,
+            member_count: clients.filter((c: any) => c.usergroup_id === g._id).length
+          }));
+          return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
+        }
+
+        case 'set_client_alias': {
+          const { mac, name: alias } = args as any;
+          const clients = await unifi.getClients();
+          const client = clients.find((c: any) => c.mac === mac);
+          if (!client) {
+            return { isError: true, content: [{ type: 'text', text: `Client with MAC ${mac} not found.` }] };
+          }
+          await unifi.setClientAlias((client as any)._id, alias);
+          return { content: [{ type: 'text', text: `Set alias on ${mac} to "${alias}"` }] };
+        }
+
+        case 'set_client_note': {
+          const { mac, note } = args as any;
+          const clients = await unifi.getClients();
+          const client = clients.find((c: any) => c.mac === mac);
+          if (!client) {
+            return { isError: true, content: [{ type: 'text', text: `Client with MAC ${mac} not found.` }] };
+          }
+          await unifi.setClientNote((client as any)._id, note);
+          return { content: [{ type: 'text', text: `Set note on ${mac}` }] };
+        }
+
+        case 'list_device_tags': {
+          const clients = await unifi.getClients();
+          const devices = await unifi.getDevices();
+          const tagMap = new Map<string, { clients: string[]; devices: string[] }>();
+          const collect = (mac: string, tags: any, bucket: 'clients' | 'devices') => {
+            if (!Array.isArray(tags)) return;
+            for (const t of tags) {
+              if (!tagMap.has(t)) tagMap.set(t, { clients: [], devices: [] });
+              tagMap.get(t)![bucket].push(mac);
+            }
+          };
+          for (const c of clients as any[]) collect(c.mac, c.tags, 'clients');
+          for (const d of devices as any[]) collect(d.mac, d.tags, 'devices');
+          const result = Array.from(tagMap.entries()).map(([tag, refs]) => ({
+            tag,
+            client_count: refs.clients.length,
+            device_count: refs.devices.length,
+            clients: refs.clients,
+            devices: refs.devices
+          }));
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
+        case 'set_device_tags': {
+          const { mac, tags, target = 'auto' } = args as any;
+          let resolved = target;
+          let id: string | undefined;
+          if (target === 'client' || target === 'auto') {
+            const clients = await unifi.getClients();
+            const client = clients.find((c: any) => c.mac === mac);
+            if (client) { resolved = 'client'; id = (client as any)._id; }
+          }
+          if (!id && (target === 'device' || target === 'auto')) {
+            const devices = await unifi.getDevices();
+            const device = devices.find((d: any) => d.mac === mac);
+            if (device) { resolved = 'device'; id = (device as any)._id; }
+          }
+          if (!id) {
+            return { isError: true, content: [{ type: 'text', text: `No ${target === 'auto' ? 'client or device' : target} found with MAC ${mac}.` }] };
+          }
+          if (resolved === 'device') {
+            await unifi.setDeviceTags(id, tags);
+          } else {
+            await unifi.setClientTags(id, tags);
+          }
+          return { content: [{ type: 'text', text: `Set ${resolved} tags on ${mac}: ${JSON.stringify(tags)}` }] };
+        }
+
+        case 'get_port_forward_rules': {
+          const rules = await unifi.getPortForwardRules();
+          return { content: [{ type: 'text', text: JSON.stringify(rules, null, 2) }] };
+        }
+
+        case 'ensure_port_forward_rule': {
+          await firewallManager.ensurePortForwardRule(args as any);
+          return { content: [{ type: 'text', text: `Ensured port forward rule: ${(args as any).name}` }] };
+        }
+
+        case 'update_port_forward_rule': {
+          const { id, payload } = args as any;
+          const result = await unifi.updatePortForwardRule(id, payload);
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
+        case 'delete_port_forward_rule': {
+          const { id } = args as any;
+          await unifi.deletePortForwardRule(id);
+          return { content: [{ type: 'text', text: JSON.stringify({ ok: true, id }, null, 2) }] };
+        }
+
+        case 'get_traffic_rules': {
+          const rules = await unifi.getTrafficRules();
+          return { content: [{ type: 'text', text: JSON.stringify(rules, null, 2) }] };
+        }
+
+        case 'update_traffic_rule': {
+          const { id, payload } = args as any;
+          const result = await unifi.updateTrafficRule(id, payload);
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
+        case 'delete_traffic_rule': {
+          const { id } = args as any;
+          await unifi.deleteTrafficRule(id);
+          return { content: [{ type: 'text', text: JSON.stringify({ ok: true, id }, null, 2) }] };
+        }
+
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -1082,15 +1339,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Start server
 async function main() {
   try {
-    console.error('Connecting to Unifi Controller...');
-    await unifi.connect();
-
-    console.error('Connected to Unifi Controller (Optimized via UnifiClient).');
-    
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    
-    console.error('Unifi MCP Server running on stdio');
+    console.error('Unifi MCP Server running on stdio (lazy-connect to UniFi on first tool call)');
   } catch (err) {
       console.error('Failed to start server:', err);
       process.exit(1);
