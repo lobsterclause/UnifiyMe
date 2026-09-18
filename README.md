@@ -1,5 +1,7 @@
 # UnifiyMe
 
+![UnifiyMe — observe, diagnose, control](docs/assets/unifiyme-banner.png)
+
 A Model Context Protocol (MCP) server for UniFi Network Controllers. This server allows you to interact with your UniFi network infrastructure through LLMs, providing both high-level monitoring and deep system-level control.
 
 ## Features
